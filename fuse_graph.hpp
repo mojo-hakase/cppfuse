@@ -119,8 +119,8 @@ public:
 	virtual openres	opendir  	(PathObject<dataType> path, struct fuse_file_info *fi);
 	virtual int 	readdir 	(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
 	virtual int 	releasedir	(const char *path, struct fuse_file_info *fi);
-/*
 	virtual int 	access  	(PathObject<dataType> path, int mask);
+/*
 	virtual int 	create    	(PathObject<dataType> path, mode_t mode, struct fuse_file_info *fi);
 */
 	virtual int 	fgetattr  	(const char *path, struct stat *statbuf, struct fuse_file_info *fi);
@@ -212,6 +212,11 @@ int FuseNode<dataType>::readdir(const char *path, void *buf, fuse_fill_dir_t fil
 template <typename dataType>
 int FuseNode<dataType>::releasedir(const char *path, struct fuse_file_info *fi) {
 	delete ((PathObject<dataType>*)fi->fh);
+	return 0;
+}
+
+template <typename dataType>
+int FuseNode<dataType>::access(PathObject<dataType> path, int mask) {
 	return 0;
 }
 

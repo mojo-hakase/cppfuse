@@ -26,7 +26,7 @@ class VidParamDumpNode;
 
 class VidParamDumpNode : public VidNode {
 public:
-	VidParamDumpNode(IVidGraph *graph) : VidNode(graph, 1000, 100, S_IFREG | 0777) {}
+	VidParamDumpNode(IVidGraph *graph) : VidNode(graph, 1000, 100, S_IFREG | 0444) {}
 
 	int getattr(VidPath path, struct stat *statbuf) {
 		statbuf->st_size = 1;
@@ -45,7 +45,7 @@ public:
 		std::stringstream ss;
 		ss << "Bitrate: " << p->data->bitrate << endl;
 		cout << "\t\t\tOFFSET: " << offset << endl;
-		if (offset >= ss.str().size())
+		if ((size_t)offset >= ss.str().size())
 			return 0;
 		p->data->dumpsize = ss.str().size();
 		strncpy(buf, ss.str().c_str() + offset, size);
@@ -71,34 +71,30 @@ public:
 	std::pair<bool,IVidNode*> getNextNode(VidPath &path) {
 		if (path.isEnd())
 			return std::pair<bool,IVidNode*>(false, this);
-		std::stringstream ss;
-		ss << *path;
-		ss >> path.data->bitrate;
+		// parse bitrate
+		unsigned int bitrate = 0;
+		for (const char *c = *path; *c; ++c) {
+			if (*c < '0' || *c > '9')
+				return std::pair<bool,IVidNode*>(false,nullptr);
+			bitrate = bitrate * 10 + (*c - '0');
+		}
+		path.data->bitrate = bitrate;
 		++path;
 		return std::pair<bool,IVidNode*>(true,optNode);
-	}
-};
-
-class VidOptNode : public VidNode {
-public:
-	VidOptNode(IVidGraph *graph) : VidNode(graph, 1000, 100) {
-		this->registerNewNode("dump", new VidParamDumpNode(graph));
-		this->registerNewNode("bitrate", new VidBitrateNode(graph, this));
-		this->registerNewNode("test", new VidParamDumpNode(graph));
-	}
-};
-
-class VidRootNode : public VidNode {
-public:
-	VidRootNode(IVidGraph *graph) : VidNode(graph, 1000, 100) {
-		this->registerNewNode("options", new VidOptNode(graph));
 	}
 };
 
 class VidFuse : public VidGraph {
 public:
 	VidFuse() {
-		this->root = this->registerNewNode(new VidRootNode(this));
+		//this->root = this->registerNewNode(new VidRootNode(this));
+		VidNode *vidroot = new VidNode(this);
+		VidNode *optnode = new VidNode(this);
+		vidroot->registerNewNode("options", optnode);
+		optnode->registerNewNode("bitrate", new VidBitrateNode(this, optnode));
+		optnode->registerNewNode("dump", new VidParamDumpNode(this));
+		this->root = vidroot;
+		this->registerNewNode(vidroot);
 	}
 	
 	std::shared_ptr<VidParams> newData() {
