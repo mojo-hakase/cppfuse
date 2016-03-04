@@ -1,5 +1,5 @@
 #include <unordered_map>	// subnodes
-#include <list>			// nodelist (graph)
+#include <unordered_set>	// nodelist (graph)
 
 #include "cppfuse.hpp"
 #include "path_splitter.hpp"
@@ -49,6 +49,8 @@ public:
 	virtual openres	opendir  	(PathObject<dataType> path, struct fuse_file_info *fi) {return openres(-ENOENT,nullptr);}
 	virtual int 	access  	(PathObject<dataType> path, int mask) {return -ENOENT;}
 	virtual openres	create    	(PathObject<dataType> path, mode_t mode, struct fuse_file_info *fi) {return openres(-ENOENT,nullptr);}
+
+	virtual ~IFuseNode<dataType>() {}
 };
 
 template <typename dataType>
@@ -63,8 +65,8 @@ std::pair<bool,IFuseNode<dataType>*> IFuseNode<dataType>::getNextNode(PathObject
 template <typename dataType>
 IFuseNode<dataType>* IFuseNode<dataType>::findNode(PathObject<dataType> &path) {
 	auto next = getNextNode(path);
-	if (next.first)
-		return this;
+	if (!next.first)
+		return next.second;
 	else if (next.second)
 		return next.second->findNode(path);
 	else
@@ -73,16 +75,22 @@ IFuseNode<dataType>* IFuseNode<dataType>::findNode(PathObject<dataType> &path) {
 
 template <typename dataType>
 class FuseNode : public IFuseNode<dataType>, public FuseFDCallback {
-	std::unordered_map<std::string,IFuseNode<dataType>*> subnodes;
-
 protected:
+	std::unordered_map<std::string,IFuseNode<dataType>*> subnodes;
+	uid_t uid;
+	gid_t gid;
+	mode_t mode;
+	static const mode_t default_mode = S_IFDIR | 0555;
+
+public:
+	FuseNode<dataType>(IFuseGraph<dataType> *graph, uid_t uid = 0, gid_t gid = 0, mode_t mode = default_mode);
 	IFuseNode<dataType>* registerNewNode(const std::string &name, IFuseNode<dataType>*);
 	IFuseNode<dataType>* addExistingNode(const std::string &name, const std::string &path);
 
 	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path);
 
-/*
 	virtual int	getattr   	(PathObject<dataType> path, struct stat *statbuf);
+/*
 	virtual int 	readlink  	(PathObject<dataType> path, char *link, size_t size);
 	virtual int 	mknod     	(PathObject<dataType> path, mode_t mode, dev_t dev);
 	virtual int 	mkdir    	(PathObject<dataType> path, mode_t mode);
@@ -95,7 +103,11 @@ protected:
 	virtual int 	chown    	(PathObject<dataType> path, uid_t uid, gid_t gid);
 	virtual int 	truncate    	(PathObject<dataType> path, off_t offset);
 	virtual int 	utimens    	(PathObject<dataType> path, const struct timespec tv[2]);
+*/
 	virtual openres	open    	(PathObject<dataType> path, struct fuse_file_info *fi);
+	virtual int flush       	(const char *path, struct fuse_file_info *fi);
+	virtual int release     	(const char *path, struct fuse_file_info *fi);
+/*
 	virtual int 	statfs  	(PathObject<dataType> path, struct statvfs *statv);
 #ifdef HAVE_SYS_XATTR_H
 	virtual int 	setxattr    	(PathObject<dataType> path, const char *name, const char *value, size_t size, int flags);
@@ -111,7 +123,15 @@ protected:
 	virtual int 	access  	(PathObject<dataType> path, int mask);
 	virtual int 	create    	(PathObject<dataType> path, mode_t mode, struct fuse_file_info *fi);
 */
+	virtual int 	fgetattr  	(const char *path, struct stat *statbuf, struct fuse_file_info *fi);
+
+	virtual ~FuseNode<dataType>() {}
 };
+
+template <typename dataType>
+FuseNode<dataType>::FuseNode(IFuseGraph<dataType> *graph, uid_t uid, gid_t gid, mode_t mode)
+	: IFuseNode<dataType>(graph), uid(uid), gid(gid), mode(mode)
+{}
 
 template <typename dataType>
 IFuseNode<dataType> *FuseNode<dataType>::registerNewNode(const std::string &name, IFuseNode<dataType> *node) {
@@ -133,12 +153,36 @@ IFuseNode<dataType> *FuseNode<dataType>::addExistingNode(const std::string &name
 template <typename dataType>
 std::pair<bool,IFuseNode<dataType>*> FuseNode<dataType>::getNextNode(PathObject<dataType> &path) {
 	if (path.isEnd())
-		return std::pair<bool,IFuseNode<dataType>*>(true, this);
+		return std::pair<bool,IFuseNode<dataType>*>(false, this);
 	auto it = subnodes.find(*path);
 	if (it == subnodes.end())
 		return std::pair<bool,IFuseNode<dataType>*>(false, nullptr);
 	++path;
-	return std::pair<bool,IFuseNode<dataType>*>(false, it->second);
+	return std::pair<bool,IFuseNode<dataType>*>(true, it->second);
+}
+
+template <typename dataType>
+int FuseNode<dataType>::getattr(PathObject<dataType> path, struct stat *statbuf) {
+	statbuf->st_uid = uid;
+	statbuf->st_gid = gid;
+	statbuf->st_mode = mode;
+	return 0;
+}
+
+template <typename dataType>
+openres FuseNode<dataType>::open(PathObject<dataType> path, struct fuse_file_info *fi) {
+	fi->fh = 0;
+	return openres(0, this);
+}
+
+template <typename dataType>
+int FuseNode<dataType>::flush(const char *path, struct fuse_file_info *fi) {
+	return 0;
+}
+
+template <typename dataType>
+int FuseNode<dataType>::release(const char *path, struct fuse_file_info *fi) {
+	return 0;
 }
 
 template <typename dataType>
@@ -153,14 +197,13 @@ int FuseNode<dataType>::readdir(const char *path, void *buf, fuse_fill_dir_t fil
 	auto it = subnodes.begin();
 	for (; i < offset && it != subnodes.end(); ++i)
 		++it;
-	++i;
 
 	struct stat stats;
 	struct stat *statbuf = &stats;
 	PathObject<dataType> *pobj = (PathObject<dataType>*) fi->fh;
 	for (; it != subnodes.end(); ++it) {
 		it->second->getattr(*pobj, statbuf);
-		if (filler(buf, it->first.c_str(), statbuf, i))
+		if (filler(buf, it->first.c_str(), statbuf, ++i))
 			return 0;
 	}
 	return 0;
@@ -172,40 +215,27 @@ int FuseNode<dataType>::releasedir(const char *path, struct fuse_file_info *fi) 
 	return 0;
 }
 
+template <typename dataType>
+int FuseNode<dataType>::fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi) {
+	statbuf->st_uid = uid;
+	statbuf->st_gid = gid;
+	statbuf->st_mode = mode;
+	return 0;
+}
 
 
 template <typename dataType>
 class IFuseGraph {
-	std::unordered_map<IFuseNode<dataType>*,int> nodes;
+	std::unordered_set<IFuseNode<dataType>*> nodes;
 protected:
 	IFuseNode<dataType> *root;
 	virtual std::shared_ptr<dataType> newData();
 public:
 	IFuseNode<dataType> *findNode(const char *path);
 	IFuseNode<dataType> *findNode(PathObject<dataType> &path);
-	template <typename NodeT, typename... Args>
-	NodeT *registerAndLinkNode(Args&&... args) {
-		NodeT *n =  new NodeT(this, args...);
-		nodes[n] = 1;
-		return n;
-	}
-	IFuseNode<dataType> *linkNode(IFuseNode<dataType> *node) {
-		auto it = nodes.find(node);
-		if (it == nodes.end())
-			return nullptr;
-		it->second++;
-		return node;
-	}
-	void unlinkNode(IFuseNode<dataType> *node) {
-		auto it = nodes.find(node);
-		if (it == nodes.end())
-			return;
-		it->second--;
-		if (it->second > 0)
-			return;
-		delete it->first;
-		nodes.erase(it);
-	}
+	IFuseNode<dataType> *registerNewNode(IFuseNode<dataType> *node);
+
+	virtual ~IFuseGraph<dataType>();
 };
 
 template <typename dataType>
@@ -216,13 +246,31 @@ std::shared_ptr<dataType> IFuseGraph<dataType>::newData() {
 }
 
 template <typename dataType>
-IFuseNode<dataType>* IFuseGraph<dataType>::findNode(const char *path) {
+IFuseNode<dataType> *IFuseGraph<dataType>::findNode(const char *path) {
+	if (!root)
+		return nullptr;
 	return root->findNode(PathSplitter::New(path)->begin<dataType>(this->newData()));
 }
 
 template <typename dataType>
-IFuseNode<dataType>* IFuseGraph<dataType>::findNode(PathObject<dataType> &path) {
+IFuseNode<dataType> *IFuseGraph<dataType>::findNode(PathObject<dataType> &path) {
+	if (!root)
+		return nullptr;
 	return root->findNode(path);
+}
+
+template <typename dataType>
+IFuseNode<dataType> *IFuseGraph<dataType>::registerNewNode(IFuseNode<dataType> *node) {
+	if (node)
+		nodes.insert(node);
+	return node;
+}
+
+template <typename dataType>
+IFuseGraph<dataType>::~IFuseGraph<dataType>() {
+	for (auto it = nodes.begin(); it != nodes.end(); ++it) {
+		delete *it;
+	}
 }
 
 
@@ -264,6 +312,8 @@ protected:
 	virtual int 	create    	(const char *path, mode_t mode, struct fuse_file_info *fi);
 	virtual int 	ftruncate    	(const char *path, off_t offset, struct fuse_file_info *fi);
 	virtual int 	fgetattr  	(const char *path, struct stat *statbuf, struct fuse_file_info *fi);
+
+	virtual ~FuseGraph<dataType>() {}
 };
 
 template <typename dataType>
