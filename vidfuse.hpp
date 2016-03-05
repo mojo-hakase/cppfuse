@@ -26,7 +26,7 @@ class VidParamDumpNode;
 
 class VidParamDumpNode : public VidNode {
 public:
-	VidParamDumpNode(IVidGraph *graph) : VidNode(graph, 1000, 100, S_IFREG | 0444) {}
+	VidParamDumpNode(IVidGraph *graph) : VidNode(graph, 1000, 1000, S_IFREG | 0444) {}
 
 	int getattr(VidPath path, struct stat *statbuf) {
 		statbuf->st_size = 1;
@@ -66,7 +66,7 @@ public:
 class VidBitrateNode : public VidNode {
 	VidNode *optNode;
 public:
-	VidBitrateNode(IVidGraph *graph, VidNode *optNode) : VidNode(graph), optNode(optNode) {}
+	VidBitrateNode(IVidGraph *graph, VidNode *optNode) : VidNode(graph, 1000, 1000), optNode(optNode) {}
 
 	std::pair<bool,IVidNode*> getNextNode(VidPath &path) {
 		if (path.isEnd())
@@ -88,8 +88,8 @@ class VidFuse : public VidGraph {
 public:
 	VidFuse() {
 		//this->root = this->registerNewNode(new VidRootNode(this));
-		VidNode *vidroot = new VidNode(this);
-		VidNode *optnode = new VidNode(this);
+		VidNode *vidroot = new VidNode(this, 1000, 1000);
+		VidNode *optnode = new VidNode(this, 1000, 1000);
 		vidroot->registerNewNode("options", optnode);
 		optnode->registerNewNode("bitrate", new VidBitrateNode(this, optnode));
 		optnode->registerNewNode("dump", new VidParamDumpNode(this));

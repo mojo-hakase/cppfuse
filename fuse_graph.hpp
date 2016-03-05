@@ -166,6 +166,7 @@ int FuseNode<dataType>::getattr(PathObject<dataType> path, struct stat *statbuf)
 	statbuf->st_uid = uid;
 	statbuf->st_gid = gid;
 	statbuf->st_mode = mode;
+	statbuf->st_nlink = 1;
 	return 0;
 }
 
