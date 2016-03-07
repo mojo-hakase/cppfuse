@@ -25,10 +25,10 @@ class VidOptNode;
 class VidBitrateNode;
 class VidParamDumpNode;
 
-class VidFilesNode : public VidNode {
+class VidFilesNode : public IVidNode, public FuseFDCallback{
 	TransparentFuse trans;
 public:
-	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : VidNode(graph), trans(baseDir) {}
+	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : IVidNode(graph), trans(baseDir) {}
 
 	std::pair<bool,IFuseNode*> getNextNode(VidPath &path) {
 		return std::pair<bool,IFuseNode*>(false, this);
@@ -38,10 +38,18 @@ public:
 		return trans.getattr(path.rest(), statbuf);
 	}
 
-	openres opendir(VidPath path, struct fuse_file_info *fi) {
-		return openres(trans.opendir(path.rest(), fi), this);
+	int access(VidPath path, int mask) {
+		return trans.access(path.rest(), mask);
 	}
 
+	openres open(VidPath path, struct fuse_file_info *fi) {
+		return openres(trans.open(path.rest(), fi), &trans);
+	}
+
+	openres opendir(VidPath path, struct fuse_file_info *fi) {
+		return openres(trans.opendir(path.rest(), fi), &trans);
+	}
+///*
 	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
 		// no need to split path, cause it won't be used anyway
 		return trans.readdir(path, buf, filler, offset, fi);
@@ -51,6 +59,7 @@ public:
 		// no need to split path, cause it won't be used anyway
 		return trans.releasedir(path, fi);
 	}
+//*/
 };
 
 class VidParamDumpNode : public VidNode {
@@ -113,18 +122,51 @@ public:
 	}
 };
 
+class SpeedTestNode : public IVidNode, public FuseFDCallback {
+public:
+	SpeedTestNode(IVidGraph *graph) : IVidNode(graph) {}
+
+	std::pair<bool,IVidNode*> getNextNode(VidPath &path) {
+		if (path.isEnd())
+			return std::pair<bool,IVidNode*>(false, this);
+		return std::pair<bool,IVidNode*>(false,nullptr);
+	}
+	int getattr(VidPath path, struct stat *statbuf) {
+		statbuf->st_uid = 1000;
+		statbuf->st_gid = 1000;
+		statbuf->st_mode = S_IFREG | 0555;
+		statbuf->st_size = -1;
+		return 0;
+	}
+	int access(VidPath path, int mask) {
+		return 0;
+	}
+	openres open(VidPath path, struct fuse_file_info *fi) {
+		fi->nonseekable = 1;
+		fi->direct_io = 1;
+		return openres(0, this);
+	}
+	int read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+		return size;
+	}
+	int release(const char *path, struct fuse_file_inf *fi) {
+		return 0;
+	}
+};
+
 class VidFuse : public VidGraph {
 public:
 	VidFuse() {
 		//this->root = this->registerNewNode(new VidRootNode(this));
 		VidNode *vidroot = new VidNode(this, 1000, 1000);
 		VidNode *optnode = new VidNode(this, 1000, 1000);
-		VidNode *filesnode = new VidFilesNode(this, "/mnt/Akame/Videos");
+		VidFilesNode *filesnode = new VidFilesNode(this, "/");
 		vidroot->registerNewNode("files", filesnode);
 		vidroot->registerNewNode("options", optnode);
 		optnode->registerNewNode("bitrate", new VidBitrateNode(this, optnode));
 		optnode->registerNewNode("dump", new VidParamDumpNode(this));
 		optnode->addExistingNode("files", filesnode);
+		vidroot->registerNewNode("speedtest", new SpeedTestNode(this));
 		this->root = vidroot;
 		this->registerNewNode(vidroot);
 	}
