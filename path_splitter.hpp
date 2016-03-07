@@ -259,6 +259,7 @@ const char* PathObject<T>::operator[](int i) {
 }
 template <typename T>
 const char* PathObject<T>::rest() {
+	ensure_depth();
 	if (depth == path->slashes.size() - 1)
 		return "/";
 	return path->path.c_str() + path->slashes[depth];
