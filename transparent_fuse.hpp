@@ -3,7 +3,7 @@
 
 #include "cppfuse.hpp"
 
-class TransparentFuse : protected Fuse {
+class TransparentFuse : public Fuse {
 	std::string baseDir;
 public:
 	TransparentFuse(const std::string &baseDir, fs_use_flag_t flags = FS_USE_ALL) : Fuse(flags), baseDir(baseDir) {}

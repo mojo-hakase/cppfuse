@@ -49,7 +49,7 @@ public:
 
 class FuseCallback : public FuseFDCallback, public FusePathCallback {};
 
-class Fuse : protected FuseCallback {
+class Fuse : public FuseCallback {
 public:
 
 	// callback functions for fuse
@@ -137,7 +137,6 @@ public:
 
 	virtual ~Fuse() {}
 
-protected:
 	Fuse(fs_use_flag_t = FS_USE_ALL);
 
 	virtual void 	init    	(struct fuse_conn_info *conn) {}
