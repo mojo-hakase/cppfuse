@@ -86,6 +86,7 @@ public:
 	FuseNode<dataType>(IFuseGraph<dataType> *graph, uid_t uid = 0, gid_t gid = 0, mode_t mode = default_mode);
 	IFuseNode<dataType>* registerNewNode(const std::string &name, IFuseNode<dataType>*);
 	IFuseNode<dataType>* addExistingNode(const std::string &name, const std::string &path);
+	IFuseNode<dataType>* addExistingNode(const std::string &name, IFuseNode<dataType>*);
 
 	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path);
 
@@ -145,6 +146,13 @@ IFuseNode<dataType> *FuseNode<dataType>::registerNewNode(const std::string &name
 template <typename dataType>
 IFuseNode<dataType> *FuseNode<dataType>::addExistingNode(const std::string &name, const std::string &path) {
 	IFuseNode<dataType> *node = this->graph->findNode(path);
+	if (node)
+		subnodes.insert(std::pair<std::string,IFuseNode<dataType>*>(name, node));
+	return node;
+}
+
+template <typename dataType>
+IFuseNode<dataType> *FuseNode<dataType>::addExistingNode(const std::string &name, IFuseNode<dataType> *node) {
 	if (node)
 		subnodes.insert(std::pair<std::string,IFuseNode<dataType>*>(name, node));
 	return node;

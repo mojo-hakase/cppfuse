@@ -1,5 +1,6 @@
 #include "transparent_fuse.hpp"
 
+#include <cstdlib>
 #include <unistd.h>	// readlink, close, mknod
 #include <fcntl.h>	// open, mknod
 #include <sys/types.h>	// open, mkfifo, mknod, *dir
@@ -7,6 +8,17 @@
 #include <dirent.h>	// *dir
 #include <stdio.h>	// rename
 #include <errno.h>
+
+std::string realpath(const std::string &path) {
+	char *p = ::realpath(path.c_str(), NULL);
+	std::string rp(p);
+	std::free(p);
+	return rp;
+}
+
+void TransparentFuse::setBaseDir(const std::string &baseDir) {
+	this->baseDir = realpath(baseDir);
+}
 
 int TransparentFuse::getattr(const char *path, struct stat *statbuf) {
 	int res = ::lstat(fullpath(path).c_str(), statbuf);

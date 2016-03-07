@@ -1,5 +1,4 @@
 #include "cppfuse.hpp"
-#include <cstdlib>
 
 struct fuse_operations Fuse::flags2struct(fs_use_flag_t f) {
 	struct fuse_operations res;
@@ -64,13 +63,6 @@ Fuse::Fuse(fs_use_flag_t opflags) : opflags(opflags)
 int Fuse::mount(int argc, char **argv) {
 	struct fuse_operations ops = flags2struct(opflags);
 	return fuse_main(argc, argv, &ops, this);
-}
-
-std::string Fuse::realpath(const std::string &path) {
-	char *p = ::realpath(path.c_str(), NULL);
-	std::string rp(p);
-	std::free(p);
-	return rp;
 }
 
 void * Fuse::s_init(struct fuse_conn_info *conn) {

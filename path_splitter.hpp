@@ -259,7 +259,9 @@ const char* PathObject<T>::operator[](int i) {
 }
 template <typename T>
 const char* PathObject<T>::rest() {
-	return path->path.c_str() + path->slash(depth);
+	if (depth == path->slashes.size() - 1)
+		return "/";
+	return path->path.c_str() + path->slashes[depth];
 }
 template <typename T>
 const char* PathObject<T>::full() {

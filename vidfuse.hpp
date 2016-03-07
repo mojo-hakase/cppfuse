@@ -1,4 +1,5 @@
 #include "fuse_graph.hpp"
+#include "transparent_fuse.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -11,10 +12,10 @@ struct VidParams {
 	size_t dumpsize;
 };
 
-typedef IFuseNode<VidParams> IVidNode;
-typedef FuseNode<VidParams> VidNode;
+typedef IFuseNode<VidParams>  IVidNode;
+typedef  FuseNode<VidParams>   VidNode;
 typedef IFuseGraph<VidParams> IVidGraph;
-typedef FuseGraph<VidParams> VidGraph;
+typedef  FuseGraph<VidParams>  VidGraph;
 
 typedef PathObject<VidParams> VidPath;
 
@@ -23,6 +24,34 @@ class VidRootNode;
 class VidOptNode;
 class VidBitrateNode;
 class VidParamDumpNode;
+
+class VidFilesNode : public VidNode {
+	TransparentFuse trans;
+public:
+	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : VidNode(graph), trans(baseDir) {}
+
+	std::pair<bool,IFuseNode*> getNextNode(VidPath &path) {
+		return std::pair<bool,IFuseNode*>(false, this);
+	}
+
+	int getattr(VidPath path, struct stat *statbuf) {
+		return trans.getattr(path.rest(), statbuf);
+	}
+
+	openres opendir(VidPath path, struct fuse_file_info *fi) {
+		return openres(trans.opendir(path.rest(), fi), this);
+	}
+
+	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
+		// no need to split path, cause it won't be used anyway
+		return trans.readdir(path, buf, filler, offset, fi);
+	}
+
+	int releasedir(const char *path, fuse_file_info *fi) {
+		// no need to split path, cause it won't be used anyway
+		return trans.releasedir(path, fi);
+	}
+};
 
 class VidParamDumpNode : public VidNode {
 public:
@@ -90,9 +119,12 @@ public:
 		//this->root = this->registerNewNode(new VidRootNode(this));
 		VidNode *vidroot = new VidNode(this, 1000, 1000);
 		VidNode *optnode = new VidNode(this, 1000, 1000);
+		VidNode *filesnode = new VidFilesNode(this, "/mnt/Akame/Videos");
+		vidroot->registerNewNode("files", filesnode);
 		vidroot->registerNewNode("options", optnode);
 		optnode->registerNewNode("bitrate", new VidBitrateNode(this, optnode));
 		optnode->registerNewNode("dump", new VidParamDumpNode(this));
+		optnode->addExistingNode("files", filesnode);
 		this->root = vidroot;
 		this->registerNewNode(vidroot);
 	}

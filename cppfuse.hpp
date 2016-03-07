@@ -132,7 +132,6 @@ public:
 	static const fs_use_flag_t FS_USE_NONE = 0x0;
 
 	static struct fuse_operations flags2struct(fs_use_flag_t f);
-	static std::string realpath(const std::string &path);
 
 	virtual int mount(int argc, char **argv);
 

@@ -6,7 +6,7 @@
 class TransparentFuse : protected Fuse {
 	std::string baseDir;
 public:
-	TransparentFuse(fs_use_flag_t flags = FS_USE_ALL) : Fuse(flags) {}
+	TransparentFuse(const std::string &baseDir, fs_use_flag_t flags = FS_USE_ALL) : Fuse(flags), baseDir(baseDir) {}
 	int mount(int argc, char **argv) {
     		if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
 			return -1;
@@ -17,10 +17,7 @@ public:
 		return Fuse::mount(argc, argv);
 	}
 
-protected:
-	std::string setBaseDir(std::string baseDir) {
-		return this->baseDir = realpath(baseDir);
-	}
+	void setBaseDir(const std::string &baseDir);
 	std::string getBaseDir() {
 		return baseDir;
 	}
