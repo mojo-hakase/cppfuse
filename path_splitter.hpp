@@ -184,6 +184,7 @@ PathObject<dataType>& PathObject<dataType>::operator=(const PathObject<convType>
 	path = o.path;
 	depth = o.depth;
 	data = nullptr;
+	return *this;
 }
 
 template <typename dataType>
@@ -191,6 +192,7 @@ PathObject<dataType>& PathObject<dataType>::operator=(const PathObject<dataType>
 	path = o.path;
 	depth = o.depth;
 	data = o.data;
+	return *this;
 }
 
 template <typename T>

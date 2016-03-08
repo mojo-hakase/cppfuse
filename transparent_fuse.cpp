@@ -221,7 +221,7 @@ int TransparentFuse::access(const char *path, int mask) {
 	int res = ::access(fullpath(path).c_str(), mask);
 	if (res < 0)
 		res = -errno;
-	return 0;
+	return res;
 }
 int TransparentFuse::create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	int res = 0;
