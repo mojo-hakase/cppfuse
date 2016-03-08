@@ -10,6 +10,7 @@ struct VidParams {
 	unsigned int bitrate;
 	bool hardsubbed;
 	size_t dumpsize;
+	std::string filepath;
 };
 
 typedef IFuseNode<VidParams>  IVidNode;
@@ -24,59 +25,24 @@ class VidRootNode;
 class VidOptNode;
 class VidBitrateNode;
 class VidParamDumpNode;
+class VidFilesNode;
 
-class VidFilesNode : public IVidNode, public FuseFDCallback{
-	TransparentFuse trans;
+class VidFilesReadDirProxy : public FuseFDCallback {
+	FuseFDCallback *clbk;
+public:
+	VidFilesReadDirProxy(FuseFDCallback *clbk) : clbk(clbk) {}
 	struct filler_buf {
-		VidFilesNode *node;
 		void *buf;
 		fuse_fill_dir_t filler;
-		filler_buf(VidFilesNode *node, void *buf, fuse_fill_dir_t filler)
-			: node(node), buf(buf), filler(filler)
-		{}
+		filler_buf(void *buf, fuse_fill_dir_t filler) : buf(buf), filler(filler) {}
 	};
-public:
-	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : IVidNode(graph), trans(baseDir) {}
 
-	std::pair<bool,IFuseNode*> getNextNode(VidPath &path) {
-		return std::pair<bool,IFuseNode*>(false, this);
-	}
-
-	int getattr(VidPath path, struct stat *statbuf) {
-		int res;
-		res = trans.getattr(path.rest(), statbuf);
-		if (res == 0) {// && statbuf->st_mode & S_IFREG) {
-			statbuf->st_mode = (statbuf->st_mode & ~S_IFREG) | S_IFDIR;
-			return res;
-		}
-		VidPath end = path.end();
-		std::string subpath = path.to(--end);
-		cout << "SUBPATH: " << subpath << endl;
-		res = trans.getattr(subpath.c_str(), statbuf);
-		if (res == 0 && statbuf->st_mode & S_IFREG) {
-			
-		}
-		return res;
-	}
-
-	int access(VidPath path, int mask) {
-		return trans.access(path.rest(), mask);
-	}
-
-	openres open(VidPath path, struct fuse_file_info *fi) {
-		return openres(trans.open(path.rest(), fi), &trans);
-	}
-
-	openres opendir(VidPath path, struct fuse_file_info *fi) {
-		return openres(trans.opendir(path.rest(), fi), &trans);
-	}
-///*
 	static int filler(void *_buf, const char *name, const struct stat *statbuf, off_t off) {
 		filler_buf *buf = (filler_buf*)_buf;
 		struct stat statcpy;
 		if (statbuf) {
 			statcpy = *statbuf;
-			statcpy.st_mode = (statcpy.st_mode & ~S_IFREG) | S_IFDIR;
+			statcpy.st_mode = (statcpy.st_mode & 07777) | S_IFDIR | 0111;
 			statbuf = &statcpy;
 		}
 		return buf->filler(buf->buf, name, statbuf, off);
@@ -84,15 +50,83 @@ public:
 
 	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
 		// no need to split path, cause it won't be used anyway
-		filler_buf mybuf(this, buf, filler);
-		return trans.readdir(path, &mybuf, VidFilesNode::filler, offset, fi);
+		filler_buf mybuf(buf, filler);
+		return clbk->readdir(path, &mybuf, VidFilesReadDirProxy::filler, offset, fi);
 	}
 
 	int releasedir(const char *path, fuse_file_info *fi) {
 		// no need to split path, cause it won't be used anyway
-		return trans.releasedir(path, fi);
+		return clbk->releasedir(path, fi);
 	}
-//*/
+};
+
+class VidFilesNode : public IVidNode, public FuseFDCallback {
+	TransparentFuse trans;
+	VidFilesReadDirProxy proxy;
+public:
+	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : IVidNode(graph), trans(baseDir), proxy(&trans) {}
+
+	std::pair<bool,IFuseNode*> getNextNode(VidPath &path) {
+		VidPath end = path.end();
+		std::string subpath = path.to(end);
+		--end;
+		int res = trans.access(subpath.c_str(), F_OK);
+		cout << subpath << ", res: " << res << endl;
+		while (res == -ENOTDIR && end.getDepth() > path.getDepth()) {
+			subpath = path.to(end);
+			cout << subpath << endl;
+			res = trans.access(subpath.c_str(), F_OK);
+			--end;
+		}
+		if (res == 0) {
+			path = end;
+			++path;
+			path.data->filepath = subpath;
+			return std::pair<bool,IFuseNode*>(false, this);
+		}
+		return std::pair<bool,IFuseNode*>(false, nullptr);
+	}
+
+	int getattr(VidPath path, struct stat *statbuf) {
+		cout << path.data->filepath.c_str() << endl;
+		int res = trans.getattr(path.data->filepath.c_str(), statbuf);
+		if (path.isEnd()) {
+			statbuf->st_mode = (statbuf->st_mode & 07777) | S_IFDIR | 0111;
+			return res;
+		}
+		return res;
+	}
+
+	int access(VidPath path, int mask) {
+		return trans.access(path.data->filepath.c_str(), mask);
+	}
+
+	openres open(VidPath path, struct fuse_file_info *fi) {
+		if (path.isEnd())
+			return openres(-EISDIR,nullptr);
+		return openres(trans.open(path.data->filepath.c_str(), fi), &trans);
+	}
+
+	openres opendir(VidPath path, struct fuse_file_info *fi) {
+		if (path.isEnd()) {
+			struct stat stats;
+			trans.getattr(path.data->filepath.c_str(), &stats);
+			if (S_ISDIR(stats.st_mode))
+				return openres(trans.opendir(path.data->filepath.c_str(), fi), &proxy);
+		}
+		fi->fh = (fuse_fh_t) new VidPath(path);
+		return openres(0, this);
+	}
+	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
+		VidPath *vp = (VidPath*)fi->fh;
+		cout << *((*vp).prev()) << endl;
+		filler(buf, *((*vp).prev()), NULL, 0);
+		return 0;
+	}
+	int releasedir(const char *path, fuse_file_info *fi) {
+		delete ((VidPath*)fi->fh);
+		return 0;
+	}
 };
 
 class VidParamDumpNode : public VidNode {
@@ -100,14 +134,16 @@ public:
 	VidParamDumpNode(IVidGraph *graph) : VidNode(graph, 1000, 1000, S_IFREG | 0444) {}
 
 	int getattr(VidPath path, struct stat *statbuf) {
-		statbuf->st_size = 1;
+		statbuf->st_size = 0;
 		return this->VidNode::getattr(path, statbuf);
 	}
 
 	openres open(VidPath path, struct fuse_file_info *fi) {
 		VidPath *np = new VidPath(path);
 		fi->fh = (fuse_fh_t) np;
-		np->data->dumpsize = 100;
+		fi->direct_io = 1;
+		fi->nonseekable = 1;
+		np->data->dumpsize = 0;
 		return openres(0, this);
 	}
 
@@ -152,6 +188,20 @@ public:
 		path.data->bitrate = bitrate;
 		++path;
 		return std::pair<bool,IVidNode*>(true,optNode);
+	}
+
+	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
+		struct stat stats, *statbuf = nullptr;
+		if (0 == optNode->getattr(PathSplitter::New("")->begin<VidParams>(), &stats))
+			statbuf = &stats;
+		const char *bitrates[] = {"00240", "00800", "01200", "02000", "04000", "08000", "11650"};
+		while (offset < 7) {
+			cout << offset << endl;
+			if (filler(buf, bitrates[offset], statbuf, offset + 1))
+				return 0;
+			++offset;
+		}
+		return 0;
 	}
 };
 
