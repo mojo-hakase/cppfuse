@@ -41,6 +41,9 @@ public:
 
 	template <typename dataType = void>
 	PathObject<dataType> begin(std::shared_ptr<dataType> data = nullptr);
+
+	template <typename dataType = void>
+	PathObject<dataType> end(std::shared_ptr<dataType> data = nullptr);
 };
 
 template <typename dataType>
@@ -71,11 +74,14 @@ public:
 	PathObject<dataType>& operator-=(size_t off);
 	PathObject<dataType>  next();
 	PathObject<dataType>  prev();
+	PathObject<dataType>  end();
 
 	const char* operator*();
 	const char* operator[](int i);
 	const char* rest();
 	const char* full();
+	template <typename oType>
+	std::string to(PathObject<oType> &to);
 
 	size_t getDepth() {return depth;}
 
@@ -151,6 +157,11 @@ PathObject<dataType> PathSplitter::begin(std::shared_ptr<dataType> data) {
 	return PathObject<dataType>(weak_this.lock(), 0, data);
 }
 
+template <typename dataType>
+PathObject<dataType> PathSplitter::end(std::shared_ptr<dataType> data) {
+	return PathObject<dataType>(weak_this.lock(), -1L, data);
+}
+
 
 
 
@@ -190,8 +201,8 @@ void PathObject<T>::ensure_depth() {
 
 template <typename T>
 PathObject<T>& PathObject<T>::operator++() {
-	ensure_depth();
 	depth++;
+	ensure_depth();
 	return *this;
 }
 template <typename T>
@@ -202,9 +213,9 @@ PathObject<T>& PathObject<T>::operator--() {
 }
 template <typename T>
 PathObject<T> PathObject<T>::operator++(int) {
-	ensure_depth();
 	int old_depth = depth;
 	depth++;
+	ensure_depth();
 	return PathObject<T>(path, old_depth, data);
 }
 template <typename T>
@@ -240,13 +251,17 @@ PathObject<T>& PathObject<T>::operator-=(size_t off) {
 }
 template <typename T>
 PathObject<T> PathObject<T>::next() {
-	return PathObject(path, depth + 1);
+	return PathObject(path, depth + 1, data);
 }
 template <typename T>
 PathObject<T> PathObject<T>::prev() {
 	if (depth)
-		return PathObject(path, depth - 1);
-	return PathObject(path);
+		return PathObject(path, depth - 1, data);
+	return PathObject(path, 0, data);
+}
+template <typename T>
+PathObject<T> PathObject<T>::end() {
+	return PathObject(path, -1, data);
 }
 
 template <typename T>
@@ -259,14 +274,24 @@ const char* PathObject<T>::operator[](int i) {
 }
 template <typename T>
 const char* PathObject<T>::rest() {
-	ensure_depth();
-	if (depth == path->slashes.size() - 1)
-		return "/";
+	if (isEnd())
+		return (isDir() ? "/" : "");
 	return path->path.c_str() + path->slashes[depth];
 }
 template <typename T>
 const char* PathObject<T>::full() {
 	return path->path.c_str();
+}
+template <typename T>
+template <typename oType>
+std::string PathObject<T>::to(PathObject<oType> &to) {
+	if (depth >= to.depth)
+		return std::string();
+	int pos = path->slashes[depth];
+	int len = path->slashes[to.depth] - pos;
+	if (!to.isDir())
+		++len;
+	return path->path.substr(pos, len);
 }
 
 template <typename T>
@@ -283,7 +308,6 @@ template <typename T>
 bool PathObject<T>::operator==(const PathObject<T> &it) {
 	if (path != it.path)
 		return false;
-	ensure_depth();
 	return (depth == it.depth ||
 		(it.depth > depth && depth >= path->slashes.size())
 		);
