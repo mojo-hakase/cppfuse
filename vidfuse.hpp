@@ -27,6 +27,14 @@ class VidParamDumpNode;
 
 class VidFilesNode : public IVidNode, public FuseFDCallback{
 	TransparentFuse trans;
+	struct filler_buf {
+		VidFilesNode *node;
+		void *buf;
+		fuse_fill_dir_t filler;
+		filler_buf(VidFilesNode *node, void *buf, fuse_fill_dir_t filler)
+			: node(node), buf(buf), filler(filler)
+		{}
+	};
 public:
 	VidFilesNode(IVidGraph *graph, const std::string &baseDir) : IVidNode(graph), trans(baseDir) {}
 
@@ -35,7 +43,20 @@ public:
 	}
 
 	int getattr(VidPath path, struct stat *statbuf) {
-		return trans.getattr(path.rest(), statbuf);
+		int res;
+		res = trans.getattr(path.rest(), statbuf);
+		if (res == 0) {// && statbuf->st_mode & S_IFREG) {
+			statbuf->st_mode = (statbuf->st_mode & ~S_IFREG) | S_IFDIR;
+			return res;
+		}
+		VidPath end = path.end();
+		std::string subpath = path.to(--end);
+		cout << "SUBPATH: " << subpath << endl;
+		res = trans.getattr(subpath.c_str(), statbuf);
+		if (res == 0 && statbuf->st_mode & S_IFREG) {
+			
+		}
+		return res;
 	}
 
 	int access(VidPath path, int mask) {
@@ -50,9 +71,21 @@ public:
 		return openres(trans.opendir(path.rest(), fi), &trans);
 	}
 ///*
+	static int filler(void *_buf, const char *name, const struct stat *statbuf, off_t off) {
+		filler_buf *buf = (filler_buf*)_buf;
+		struct stat statcpy;
+		if (statbuf) {
+			statcpy = *statbuf;
+			statcpy.st_mode = (statcpy.st_mode & ~S_IFREG) | S_IFDIR;
+			statbuf = &statcpy;
+		}
+		return buf->filler(buf->buf, name, statbuf, off);
+	}
+
 	int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
 		// no need to split path, cause it won't be used anyway
-		return trans.readdir(path, buf, filler, offset, fi);
+		filler_buf mybuf(this, buf, filler);
+		return trans.readdir(path, &mybuf, VidFilesNode::filler, offset, fi);
 	}
 
 	int releasedir(const char *path, fuse_file_info *fi) {
