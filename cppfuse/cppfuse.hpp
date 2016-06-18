@@ -49,6 +49,72 @@ public:
 
 class FuseCallback : public FuseFDCallback, public FusePathCallback {};
 
+typedef uint64_t fuseFunctionSelection;
+static const fuseFunctionSelection FS_FUNC_GETATTR    	= 1 <<  0;
+static const fuseFunctionSelection FS_FUNC_READLINK   	= 1 <<  1;
+static const fuseFunctionSelection FS_FUNC_MKNOD      	= 1 <<  2;
+static const fuseFunctionSelection FS_FUNC_MKDIR      	= 1 <<  3;
+static const fuseFunctionSelection FS_FUNC_UNLINK     	= 1 <<  4;
+static const fuseFunctionSelection FS_FUNC_RMDIR      	= 1 <<  5;
+static const fuseFunctionSelection FS_FUNC_SYMLINK    	= 1 <<  6;
+static const fuseFunctionSelection FS_FUNC_RENAME     	= 1 <<  7;
+static const fuseFunctionSelection FS_FUNC_LINK       	= 1 <<  8;
+static const fuseFunctionSelection FS_FUNC_CHMOD      	= 1 <<  9;
+static const fuseFunctionSelection FS_FUNC_CHOWN      	= 1 << 10;
+static const fuseFunctionSelection FS_FUNC_TRUNCATE   	= 1 << 11;
+static const fuseFunctionSelection FS_FUNC_UTIMENS     	= 1 << 12;
+static const fuseFunctionSelection FS_FUNC_OPEN       	= 1 << 13;
+static const fuseFunctionSelection FS_FUNC_READ       	= 1 << 14;
+static const fuseFunctionSelection FS_FUNC_WRITE      	= 1 << 15;
+static const fuseFunctionSelection FS_FUNC_STATFS     	= 1 << 16;
+static const fuseFunctionSelection FS_FUNC_FLUSH      	= 1 << 17;
+static const fuseFunctionSelection FS_FUNC_RELEASE    	= 1 << 18;
+static const fuseFunctionSelection FS_FUNC_FSYNC      	= 1 << 19;
+#ifdef HAVE_SYS_XATTR_H
+static const fuseFunctionSelection FS_FUNC_SETXATTR   	= 1 << 20;
+static const fuseFunctionSelection FS_FUNC_GETXATTR   	= 1 << 21;
+static const fuseFunctionSelection FS_FUNC_LISTXATTR  	= 1 << 22;
+static const fuseFunctionSelection FS_FUNC_REMOVEXATTR	= 1 << 23;
+#endif
+static const fuseFunctionSelection FS_FUNC_OPENDIR    	= 1 << 24;
+static const fuseFunctionSelection FS_FUNC_READDIR    	= 1 << 25;
+static const fuseFunctionSelection FS_FUNC_RELEASEDIR 	= 1 << 26;
+static const fuseFunctionSelection FS_FUNC_FSYNCDIR   	= 1 << 27;
+static const fuseFunctionSelection FS_FUNC_ACCESS     	= 1 << 28;
+static const fuseFunctionSelection FS_FUNC_CREATE     	= 1 << 29;
+static const fuseFunctionSelection FS_FUNC_FTRUNCATE  	= 1 << 30;
+static const fuseFunctionSelection FS_FUNC_FGETATTR   	= 1 << 31;
+
+static const fuseFunctionSelection FS_FUNC_NONE = 0x0;
+static const fuseFunctionSelection FS_FUNC_ALL = 0xFFFFFFFF;
+static const fuseFunctionSelection FS_FUNC_READONLY =
+	FS_FUNC_GETATTR  |
+	FS_FUNC_READLINK  |
+	FS_FUNC_OPEN      |
+	FS_FUNC_READ      |
+	FS_FUNC_STATFS    |
+	FS_FUNC_RELEASE   |
+	FS_FUNC_FSYNC     |
+#ifdef HAVE_SYS_XATTR_H
+	FS_FUNC_GETXATTR  |
+	FS_FUNC_LISTXATTR |
+#endif
+	FS_FUNC_OPENDIR   |
+	FS_FUNC_READDIR   |
+	FS_FUNC_RELEASEDIR |
+	FS_FUNC_ACCESS    |
+	FS_FUNC_FGETATTR;
+static const fuseFunctionSelection FS_FUNC_MODIFYING = ~FS_FUNC_READONLY;
+static const fuseFunctionSelection FS_FUNC_STRUCTURE_CHANGE =
+	FS_FUNC_MKNOD   |
+	FS_FUNC_MKDIR   |
+	FS_FUNC_UNLINK  |
+	FS_FUNC_RMDIR   |
+	FS_FUNC_SYMLINK |
+	FS_FUNC_RENAME  |
+	FS_FUNC_LINK    |
+	FS_FUNC_CREATE;
+
 class Fuse : public FuseCallback {
 public:
 
@@ -91,105 +157,65 @@ public:
 	static int 	s_ftruncate    	(const char *, off_t, struct fuse_file_info *);
 	static int 	s_fgetattr  	(const char *, struct stat *, struct fuse_file_info *);
 
-	typedef unsigned int fs_use_flag_t;
-	static const fs_use_flag_t FS_USE_GETATTR    	= 1 <<  0;
-	static const fs_use_flag_t FS_USE_READLINK   	= 1 <<  1;
-	static const fs_use_flag_t FS_USE_MKNOD      	= 1 <<  2;
-	static const fs_use_flag_t FS_USE_MKDIR      	= 1 <<  3;
-	static const fs_use_flag_t FS_USE_UNLINK     	= 1 <<  4;
-	static const fs_use_flag_t FS_USE_RMDIR      	= 1 <<  5;
-	static const fs_use_flag_t FS_USE_SYMLINK    	= 1 <<  6;
-	static const fs_use_flag_t FS_USE_RENAME     	= 1 <<  7;
-	static const fs_use_flag_t FS_USE_LINK       	= 1 <<  8;
-	static const fs_use_flag_t FS_USE_CHMOD      	= 1 <<  9;
-	static const fs_use_flag_t FS_USE_CHOWN      	= 1 << 10;
-	static const fs_use_flag_t FS_USE_TRUNCATE   	= 1 << 11;
-	static const fs_use_flag_t FS_USE_UTIMENS      	= 1 << 12;
-	static const fs_use_flag_t FS_USE_OPEN       	= 1 << 13;
-	static const fs_use_flag_t FS_USE_READ       	= 1 << 14;
-	static const fs_use_flag_t FS_USE_WRITE      	= 1 << 15;
-	static const fs_use_flag_t FS_USE_STATFS     	= 1 << 16;
-	static const fs_use_flag_t FS_USE_FLUSH      	= 1 << 17;
-	static const fs_use_flag_t FS_USE_RELEASE    	= 1 << 18;
-	static const fs_use_flag_t FS_USE_FSYNC      	= 1 << 19;
-#ifdef HAVE_SYS_XATTR_H
-	static const fs_use_flag_t FS_USE_SETXATTR   	= 1 << 20;
-	static const fs_use_flag_t FS_USE_GETXATTR   	= 1 << 21;
-	static const fs_use_flag_t FS_USE_LISTXATTR  	= 1 << 22;
-	static const fs_use_flag_t FS_USE_REMOVEXATTR	= 1 << 23;
-#endif
-	static const fs_use_flag_t FS_USE_OPENDIR    	= 1 << 24;
-	static const fs_use_flag_t FS_USE_READDIR    	= 1 << 25;
-	static const fs_use_flag_t FS_USE_RELEASEDIR 	= 1 << 26;
-	static const fs_use_flag_t FS_USE_FSYNCDIR   	= 1 << 27;
-	static const fs_use_flag_t FS_USE_ACCESS     	= 1 << 28;
-	static const fs_use_flag_t FS_USE_CREATE     	= 1 << 29;
-	static const fs_use_flag_t FS_USE_FTRUNCATE  	= 1 << 30;
-	static const fs_use_flag_t FS_USE_FGETATTR   	= 1 << 31;
-
-	static const fs_use_flag_t FS_USE_ALL = 0xFFFFFFFF;
-	static const fs_use_flag_t FS_USE_READONLY = 0x97656003;
-	static const fs_use_flag_t FS_USE_NONE = 0x0;
-
-	static struct fuse_operations flags2struct(fs_use_flag_t f);
+	static struct fuse_operations flags2struct(fuseFunctionSelection f);
 
 	virtual int mount(int argc, char **argv);
 
 	virtual ~Fuse() {}
 
-	Fuse(fs_use_flag_t = FS_USE_ALL);
+	Fuse(fuseFunctionSelection = FS_FUNC_ALL);
 
 	virtual void 	init    	(struct fuse_conn_info *conn) {}
 	virtual void 	destroy  	(void *userdata) {}
 
 private:
-	fs_use_flag_t opflags;
+	fuseFunctionSelection opflags;
 };
 
 
-struct fuse_operations Fuse::flags2struct(fs_use_flag_t f) {
+struct fuse_operations Fuse::flags2struct(fuseFunctionSelection f) {
 	struct fuse_operations res;
 	res.init = s_init;
 	res.destroy = s_destroy;
-	res.getattr = (f & FS_USE_GETATTR) ? s_getattr : NULL;
-	res.readlink = (f & FS_USE_READLINK) ? s_readlink : NULL;
-	res.mknod = (f & FS_USE_MKNOD) ? s_mknod : NULL;
-	res.mkdir = (f & FS_USE_MKDIR) ? s_mkdir : NULL;
-	res.unlink = (f & FS_USE_UNLINK) ? s_unlink : NULL;
-	res.rmdir = (f & FS_USE_RMDIR) ? s_rmdir : NULL;
-	res.symlink = (f & FS_USE_SYMLINK) ? s_symlink : NULL;
-	res.rename = (f & FS_USE_RENAME) ? s_rename : NULL;
-	res.link = (f & FS_USE_LINK) ? s_link : NULL;
-	res.chmod = (f & FS_USE_CHMOD) ? s_chmod : NULL;
-	res.chown = (f & FS_USE_CHOWN) ? s_chown : NULL;
-	res.truncate = (f & FS_USE_TRUNCATE) ? s_truncate : NULL;
-	res.utimens = (f & FS_USE_UTIMENS) ? s_utimens : NULL;
-	res.open = (f & FS_USE_OPEN) ? s_open : NULL;
-	res.read = (f & FS_USE_READ) ? s_read : NULL;
-	res.write = (f & FS_USE_WRITE) ? s_write : NULL;
-	res.statfs = (f & FS_USE_STATFS) ? s_statfs : NULL;
-	res.flush = (f & FS_USE_FLUSH) ? s_flush : NULL;
-	res.release = (f & FS_USE_RELEASE) ? s_release : NULL;
-	res.fsync = (f & FS_USE_FSYNC) ? s_fsync : NULL;
+	res.getattr = (f & FS_FUNC_GETATTR) ? s_getattr : NULL;
+	res.readlink = (f & FS_FUNC_READLINK) ? s_readlink : NULL;
+	res.mknod = (f & FS_FUNC_MKNOD) ? s_mknod : NULL;
+	res.mkdir = (f & FS_FUNC_MKDIR) ? s_mkdir : NULL;
+	res.unlink = (f & FS_FUNC_UNLINK) ? s_unlink : NULL;
+	res.rmdir = (f & FS_FUNC_RMDIR) ? s_rmdir : NULL;
+	res.symlink = (f & FS_FUNC_SYMLINK) ? s_symlink : NULL;
+	res.rename = (f & FS_FUNC_RENAME) ? s_rename : NULL;
+	res.link = (f & FS_FUNC_LINK) ? s_link : NULL;
+	res.chmod = (f & FS_FUNC_CHMOD) ? s_chmod : NULL;
+	res.chown = (f & FS_FUNC_CHOWN) ? s_chown : NULL;
+	res.truncate = (f & FS_FUNC_TRUNCATE) ? s_truncate : NULL;
+	res.utimens = (f & FS_FUNC_UTIMENS) ? s_utimens : NULL;
+	res.open = (f & FS_FUNC_OPEN) ? s_open : NULL;
+	res.read = (f & FS_FUNC_READ) ? s_read : NULL;
+	res.write = (f & FS_FUNC_WRITE) ? s_write : NULL;
+	res.statfs = (f & FS_FUNC_STATFS) ? s_statfs : NULL;
+	res.flush = (f & FS_FUNC_FLUSH) ? s_flush : NULL;
+	res.release = (f & FS_FUNC_RELEASE) ? s_release : NULL;
+	res.fsync = (f & FS_FUNC_FSYNC) ? s_fsync : NULL;
 #ifdef HAVE_SYS_XATTR_H
-	res.setxattr = (f & FS_USE_SETXATTR) ? s_setxattr : NULL;
-	res.getxattr = (f & FS_USE_GETXATTR) ? s_getxattr : NULL;
-	res.listxattr = (f & FS_USE_LISTXATTR) ? s_listxattr : NULL;
-	res.removexattr = (f & FS_USE_REMOVEXATTR) ? s_removexattr : NULL;
+	res.setxattr = (f & FS_FUNC_SETXATTR) ? s_setxattr : NULL;
+	res.getxattr = (f & FS_FUNC_GETXATTR) ? s_getxattr : NULL;
+	res.listxattr = (f & FS_FUNC_LISTXATTR) ? s_listxattr : NULL;
+	res.removexattr = (f & FS_FUNC_REMOVEXATTR) ? s_removexattr : NULL;
 #else
 	res.setxattr = NULL;
 	res.getxattr = NULL;
 	res.listxattr = NULL;
 	res.removexattr = NULL;
 #endif
-	res.opendir = (f & FS_USE_OPENDIR) ? s_opendir : NULL;
-	res.readdir = (f & FS_USE_READDIR) ? s_readdir : NULL;
-	res.releasedir = (f & FS_USE_RELEASEDIR) ? s_releasedir : NULL;
-	res.fsyncdir = (f & FS_USE_FSYNCDIR) ? s_fsyncdir : NULL;
-	res.access = (f & FS_USE_ACCESS) ? s_access : NULL;
-	res.create = (f & FS_USE_CREATE) ? s_create : NULL;
-	res.ftruncate = (f & FS_USE_FTRUNCATE) ? s_ftruncate : NULL;
-	res.fgetattr = (f & FS_USE_FGETATTR) ? s_fgetattr : NULL;
+	res.opendir = (f & FS_FUNC_OPENDIR) ? s_opendir : NULL;
+	res.readdir = (f & FS_FUNC_READDIR) ? s_readdir : NULL;
+	res.releasedir = (f & FS_FUNC_RELEASEDIR) ? s_releasedir : NULL;
+	res.fsyncdir = (f & FS_FUNC_FSYNCDIR) ? s_fsyncdir : NULL;
+	res.access = (f & FS_FUNC_ACCESS) ? s_access : NULL;
+	res.create = (f & FS_FUNC_CREATE) ? s_create : NULL;
+	res.ftruncate = (f & FS_FUNC_FTRUNCATE) ? s_ftruncate : NULL;
+	res.fgetattr = (f & FS_FUNC_FGETATTR) ? s_fgetattr : NULL;
 	res.flag_nullpath_ok = 0;
 	res.flag_nopath = 0;
 	res.flag_utime_omit_ok = 0;
@@ -204,7 +230,7 @@ struct fuse_operations Fuse::flags2struct(fs_use_flag_t f) {
 	return res;
 }
 
-Fuse::Fuse(fs_use_flag_t opflags) : opflags(opflags)
+Fuse::Fuse(fuseFunctionSelection opflags) : opflags(opflags)
 {}
 
 int Fuse::mount(int argc, char **argv) {

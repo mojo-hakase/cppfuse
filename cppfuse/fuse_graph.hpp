@@ -22,8 +22,8 @@ protected:
 public:
 	IFuseNode(IFuseGraph<dataType>*);
 
-	IFuseNode<dataType>* findNode(PathObject<dataType> &path);
-	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path);
+	IFuseNode<dataType>* findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose);
+	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose);
 
 	virtual int	getattr   	(PathObject<dataType> path, struct stat *statbuf) {return -ENOENT;}
 	virtual int 	readlink  	(PathObject<dataType> path, char *link, size_t size) {return -ENOENT;}
@@ -58,17 +58,17 @@ IFuseNode<dataType>::IFuseNode(IFuseGraph<dataType> *graph) : graph(graph)
 {}
 
 template <typename dataType>
-std::pair<bool,IFuseNode<dataType>*> IFuseNode<dataType>::getNextNode(PathObject<dataType> &path) {
+std::pair<bool,IFuseNode<dataType>*> IFuseNode<dataType>::getNextNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose) {
 	return std::pair<bool,IFuseNode<dataType>*>(false,nullptr);
 }
 
 template <typename dataType>
-IFuseNode<dataType>* IFuseNode<dataType>::findNode(PathObject<dataType> &path) {
-	auto next = getNextNode(path);
+IFuseNode<dataType>* IFuseNode<dataType>::findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose) {
+	auto next = getNextNode(path, purpose);
 	if (!next.first)
 		return next.second;
 	else if (next.second)
-		return next.second->findNode(path);
+		return next.second->findNode(path, purpose);
 	else
 		return nullptr;
 }
@@ -88,7 +88,7 @@ public:
 	IFuseNode<dataType>* addExistingNode(const std::string &name, const std::string &path);
 	IFuseNode<dataType>* addExistingNode(const std::string &name, IFuseNode<dataType>*);
 
-	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path);
+	virtual std::pair<bool,IFuseNode<dataType>*> getNextNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose);
 
 	virtual int	getattr   	(PathObject<dataType> path, struct stat *statbuf);
 /*
@@ -145,7 +145,7 @@ IFuseNode<dataType> *FuseNode<dataType>::registerNewNode(const std::string &name
 
 template <typename dataType>
 IFuseNode<dataType> *FuseNode<dataType>::addExistingNode(const std::string &name, const std::string &path) {
-	IFuseNode<dataType> *node = this->graph->findNode(path);
+	IFuseNode<dataType> *node = this->graph->findNode(path, FS_FUNC_NONE);
 	if (node)
 		subnodes.insert(std::pair<std::string,IFuseNode<dataType>*>(name, node));
 	return node;
@@ -159,7 +159,7 @@ IFuseNode<dataType> *FuseNode<dataType>::addExistingNode(const std::string &name
 }
 
 template <typename dataType>
-std::pair<bool,IFuseNode<dataType>*> FuseNode<dataType>::getNextNode(PathObject<dataType> &path) {
+std::pair<bool,IFuseNode<dataType>*> FuseNode<dataType>::getNextNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose) {
 	if (path.isEnd())
 		return std::pair<bool,IFuseNode<dataType>*>(false, this);
 	auto it = subnodes.find(*path);
@@ -245,8 +245,8 @@ protected:
 	IFuseNode<dataType> *root;
 	virtual std::shared_ptr<dataType> newData();
 public:
-	IFuseNode<dataType> *findNode(const char *path);
-	IFuseNode<dataType> *findNode(PathObject<dataType> &path);
+	IFuseNode<dataType> *findNode(const char *path, const fuseFunctionSelection &purpose);
+	IFuseNode<dataType> *findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose);
 	IFuseNode<dataType> *registerNewNode(IFuseNode<dataType> *node);
 
 	virtual ~IFuseGraph<dataType>();
@@ -260,17 +260,17 @@ std::shared_ptr<dataType> IFuseGraph<dataType>::newData() {
 }
 
 template <typename dataType>
-IFuseNode<dataType> *IFuseGraph<dataType>::findNode(const char *path) {
+IFuseNode<dataType> *IFuseGraph<dataType>::findNode(const char *path, const fuseFunctionSelection &purpose) {
 	if (!root)
 		return nullptr;
-	return root->findNode(PathSplitter::New(path)->begin<dataType>(this->newData()));
+	return root->findNode(PathSplitter::New(path)->begin<dataType>(this->newData()), purpose);
 }
 
 template <typename dataType>
-IFuseNode<dataType> *IFuseGraph<dataType>::findNode(PathObject<dataType> &path) {
+IFuseNode<dataType> *IFuseGraph<dataType>::findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose) {
 	if (!root)
 		return nullptr;
-	return root->findNode(path);
+	return root->findNode(path, purpose);
 }
 
 template <typename dataType>
@@ -333,7 +333,7 @@ protected:
 template <typename dataType>
 int FuseGraph<dataType>::getattr(const char *path, struct stat *statbuf) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_GETATTR);
 	if (node)
 		return node->getattr(pobj, statbuf);
 	return -ENOENT;
@@ -341,7 +341,7 @@ int FuseGraph<dataType>::getattr(const char *path, struct stat *statbuf) {
 template <typename dataType>
 int FuseGraph<dataType>::readlink(const char *path, char *link, size_t size) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_READLINK);
 	if (node)
 		return node->readlink(pobj,link,size);
 	return -ENOENT;
@@ -349,7 +349,7 @@ int FuseGraph<dataType>::readlink(const char *path, char *link, size_t size) {
 template <typename dataType>
 int FuseGraph<dataType>::mknod(const char *path, mode_t mode, dev_t dev) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_MKNOD);
 	if (node)
 		return node->mknod(pobj,mode,dev);
 	return -ENOENT;
@@ -357,7 +357,7 @@ int FuseGraph<dataType>::mknod(const char *path, mode_t mode, dev_t dev) {
 template <typename dataType>
 int FuseGraph<dataType>::mkdir(const char *path, mode_t mode) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_MKDIR);
 	if (node)
 		return node->mkdir(pobj,mode);
 	return -ENOENT;
@@ -365,7 +365,7 @@ int FuseGraph<dataType>::mkdir(const char *path, mode_t mode) {
 template <typename dataType>
 int FuseGraph<dataType>::unlink(const char *path) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_UNLINK);
 	if (node)
 		return node->unlink(pobj);
 	return -ENOENT;
@@ -373,7 +373,7 @@ int FuseGraph<dataType>::unlink(const char *path) {
 template <typename dataType>
 int FuseGraph<dataType>::rmdir(const char *path) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_RMDIR);
 	if (node)
 		return node->rmdir(pobj);
 	return -ENOENT;
@@ -381,7 +381,7 @@ int FuseGraph<dataType>::rmdir(const char *path) {
 template <typename dataType>
 int FuseGraph<dataType>::symlink(const char *path, const char *link) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_SYMLINK);
 	if (node)
 		return node->symlink(path,pobj);
 	return -ENOENT;
@@ -389,7 +389,7 @@ int FuseGraph<dataType>::symlink(const char *path, const char *link) {
 template <typename dataType>
 int FuseGraph<dataType>::rename(const char *path, const char *newpath) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_RENAME);
 	if (node)
 		return node->rename(pobj,newpath);
 	return -ENOENT;
@@ -397,7 +397,7 @@ int FuseGraph<dataType>::rename(const char *path, const char *newpath) {
 template <typename dataType>
 int FuseGraph<dataType>::link(const char *path, const char *link) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_LINK);
 	if (node)
 		return node->link(pobj,link);
 	return -ENOENT;
@@ -405,7 +405,7 @@ int FuseGraph<dataType>::link(const char *path, const char *link) {
 template <typename dataType>
 int FuseGraph<dataType>::chmod(const char *path, mode_t mode) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_CHMOD);
 	if (node)
 		return node->chmod(pobj,mode);
 	return -ENOENT;
@@ -413,7 +413,7 @@ int FuseGraph<dataType>::chmod(const char *path, mode_t mode) {
 template <typename dataType>
 int FuseGraph<dataType>::chown(const char *path, uid_t uid, gid_t gid) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_CHOWN);
 	if (node)
 		return node->chown(pobj,uid,gid);
 	return -ENOENT;
@@ -421,7 +421,7 @@ int FuseGraph<dataType>::chown(const char *path, uid_t uid, gid_t gid) {
 template <typename dataType>
 int FuseGraph<dataType>::truncate(const char *path, off_t offset) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_TRUNCATE);
 	if (node)
 		return node->truncate(pobj,offset);
 	return -ENOENT;
@@ -429,7 +429,7 @@ int FuseGraph<dataType>::truncate(const char *path, off_t offset) {
 template <typename dataType>
 int FuseGraph<dataType>::utimens(const char *path, const struct timespec tv[2]) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_UTIMENS);
 	if (node)
 		return node->utimens(pobj,tv);
 	return -ENOENT;
@@ -438,7 +438,7 @@ int FuseGraph<dataType>::utimens(const char *path, const struct timespec tv[2]) 
 template <typename dataType>
 int FuseGraph<dataType>::open(const char *path, struct fuse_file_info *fi) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_OPEN);
 	if (!node)
 		return -ENOENT;
 	openres result = node->open(pobj,fi);
@@ -475,7 +475,7 @@ int FuseGraph<dataType>::write(const char *path, const char *buf, size_t size, o
 template <typename dataType>
 int FuseGraph<dataType>::statfs(const char *path, struct statvfs *statv) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_STATFS);
 	if (node)
 		return node->statfs(pobj,statv);
 	return -ENOENT;
@@ -520,7 +520,7 @@ int FuseGraph<dataType>::fsync(const char *path, int datasync, struct fuse_file_
 template <typename dataType>
 int FuseGraph<dataType>::setxattr(const char *path, const char *name, const char *value, size_t size, int flags) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_SETXATTR);
 	if (node)
 		return node->setxattr(pobj,name,value,size,flags);
 	return -ENOENT;
@@ -528,7 +528,7 @@ int FuseGraph<dataType>::setxattr(const char *path, const char *name, const char
 template <typename dataType>
 int FuseGraph<dataType>::getxattr(const char *path, const char *name, char *value, size_t size) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_GETXATTR);
 	if (node)
 		return node->getxattr(pobj,name,value,size);
 	return -ENOENT;
@@ -536,7 +536,7 @@ int FuseGraph<dataType>::getxattr(const char *path, const char *name, char *valu
 template <typename dataType>
 int FuseGraph<dataType>::listxattr(const char *path, char *name, size_t size) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_LISTXATTR);
 	if (node)
 		return node->listxattr(pobj,name,size);
 	return -ENOENT;
@@ -544,7 +544,7 @@ int FuseGraph<dataType>::listxattr(const char *path, char *name, size_t size) {
 template <typename dataType>
 int FuseGraph<dataType>::removexattr(const char *path, const char *name) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_REMOVEXATTR);
 	if (node)
 		return node->removexattr(pobj,name);
 	return -ENOENT;
@@ -553,7 +553,7 @@ int FuseGraph<dataType>::removexattr(const char *path, const char *name) {
 template <typename dataType>
 int FuseGraph<dataType>::opendir(const char *path, struct fuse_file_info *fi) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_OPENDIR);
 	if (!node)
 		return -ENOENT;
 	openres result = node->opendir(pobj,fi);
@@ -602,7 +602,7 @@ int FuseGraph<dataType>::fsyncdir(const char *path, int datasync, struct fuse_fi
 template <typename dataType>
 int FuseGraph<dataType>::access(const char *path, int mask) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_ACCESS);
 	if (node)
 		return node->access(pobj,mask);
 	return -ENOENT;
@@ -610,7 +610,7 @@ int FuseGraph<dataType>::access(const char *path, int mask) {
 template <typename dataType>
 int FuseGraph<dataType>::create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	PathObject<dataType> pobj(PathSplitter::New(path)->begin<dataType>(this->newData()));
-	IFuseNode<dataType> *node = this->findNode(pobj);
+	IFuseNode<dataType> *node = this->findNode(pobj, FS_FUNC_CREATE);
 	if (!node)
 		return -ENOENT;
 	openres result = node->create(pobj,mode,fi);
