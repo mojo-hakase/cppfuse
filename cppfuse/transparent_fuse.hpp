@@ -6,7 +6,7 @@
 class TransparentFuse : public Fuse {
 	std::string baseDir;
 public:
-	TransparentFuse(const std::string &baseDir, fs_use_flag_t flags = FS_USE_ALL) : Fuse(flags), baseDir(baseDir) {}
+	TransparentFuse(const std::string &baseDir, fuseFunctionSelection usedFunctions = FS_FUNC_ALL) : Fuse(usedFunctions), baseDir(baseDir) {}
 	int mount(int argc, char **argv) {
     		if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
 			return -1;

@@ -293,6 +293,8 @@ template <typename dataType>
 class FuseGraph : public IFuseGraph<dataType>, public Fuse {
 	FDManager fdm;
 protected:
+	FuseGraph(fuseFunctionSelection usedFunctions = FS_FUNC_ALL);
+
 	virtual int	getattr   	(const char *path, struct stat *statbuf);
 	virtual int 	readlink  	(const char *path, char *link, size_t size);
 	virtual int 	mknod     	(const char *path, mode_t mode, dev_t dev);
@@ -330,6 +332,11 @@ protected:
 
 	virtual ~FuseGraph<dataType>() {}
 };
+
+template <typename dataType>
+FuseGraph<dataType>::FuseGraph(fuseFunctionSelection usedFunctions)
+	: Fuse(usedFunctions)
+{}
 
 template <typename dataType>
 int FuseGraph<dataType>::getattr(const char *path, struct stat *statbuf) {
