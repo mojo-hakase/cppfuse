@@ -245,9 +245,10 @@ protected:
 	IFuseNode<dataType> *root;
 	virtual std::shared_ptr<dataType> newData();
 public:
-	IFuseNode<dataType> *findNode(const char *path, const fuseFunctionSelection &purpose);
-	IFuseNode<dataType> *findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose);
+	IFuseNode<dataType> *findNode(const char *path, const fuseFunctionSelection &purpose = FS_FUNC_NONE);
+	IFuseNode<dataType> *findNode(PathObject<dataType> &path, const fuseFunctionSelection &purpose = FS_FUNC_NONE);
 	IFuseNode<dataType> *registerNewNode(IFuseNode<dataType> *node);
+//	std::weak_ptr<IFuseNode<dataType>> linkNode(std::shared_ptr<IFuseNode<dataType>> 
 
 	virtual ~IFuseGraph<dataType>();
 };
